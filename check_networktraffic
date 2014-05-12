@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+__author__ = 'Mahmoud Adel <mahmoud@codescalers.com>'
+__version__ = 0.1
+
+'''
+Simple Nagios NRPE plugin to monitor the network traffic rate
+'''
+
+import argparse
+import time
+
+#Setting Nagios compatible exit values
+OK = 0
+WARNING = 1
+CRITICAL = 2
+UNKNOWN = 3
+
+#Setting plugin cmd arguments
+parser = argparse.ArgumentParser(prog='check_networktraffic', usage='check_networktraffic -i {all | <Interface>} -c <Critical Value> -w <Warning Value>')
+parser.add_argument('-i', help='{all | <Interface>}', required=True)
+parser.add_argument('-c', help='<Critical Value> Evaluated as KB/s', required=True)
+parser.add_argument('-w', help='<Warning Value> Evaluated as KB/s', required=True)
+args = vars(parser.parse_args())
+
+#Checking arguments
+if args['i'] == 'all':
+    nic = ':'
+else:
+    nic = args['i']
+
+try:
+    critical = float(args['c'])
+except ValueError:
+    print('-c value should be int/float')
+    exit(UNKNOWN)
+
+try:
+    warning = float(args['w'])
+except ValueError:
+    print('-w value should be int/float')
+    exit(UNKNOWN)
+
+#Setting functions
+def getTraf(iface):
+    rawstatus = []
+    counter = 0
+    matchediface = 0
+    with open('/proc/net/dev') as f:
+        for i in f:
+            if iface in i:
+                matchediface = matchediface + 1
+                rawstatus.append(i.split())
+                rcv = float(rawstatus[0][1])
+                sent = float(rawstatus[0][9])
+                counter = counter + rcv + sent
+                rawstatus = []
+    if matchediface == 0:
+        print('-i value should be "all" or a valid network interface')
+        exit(UNKNOWN)
+    return counter / 1024
+
+def main():
+    old = getTraf(nic)
+    time.sleep(1)
+    new = getTraf(nic)
+    traf = new - old
+    if traf >= critical:
+        print('Critical: {} KB/s'.format("%.2f" % traf))
+        exit(CRITICAL)
+    elif traf >= warning:
+        print('Warning: {} KB/s'.format("%.2f" % traf))
+        exit(WARNING)
+    else:
+        print('Ok: {} KB/s'.format("%.2f" % traf))
+        exit(OK)
+
+#Calling main() function
+if __name__ == '__main__': main()
